@@ -1,5 +1,3 @@
  # Laboratorio_Genomica_Comparata
-Ciuppa
-ciao file modifica
-git status
+University Project with Professors Mirko Martini and Fabrizio Ghiselli
 
