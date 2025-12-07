@@ -57,7 +57,7 @@ The first `export` is needed to set the `NUMEXPR_MAX_THREADS` equals to the numb
 ### spectra-cn (KAT): remaps k-mers onto the assembly to visualize how they have been used.
 It provides a representation of the frequency of k-mers included or not included in the assembly.
 
-# Polishing
+## Polishing
 We will now use the short reads to refine the assembly → genome polishing.
 
 ### Mapping of the reads
@@ -147,3 +147,42 @@ This means that our distinct k-mers were used only once across the entire assemb
 Sometimes, there may be regions of the genome with high multiplicity, but the k-mers are duplicated (shown in different colors on the plot).
 We also see 0x coverage (black), which represents k-mers that were not used to produce the assembly. These could be sequencing errors, k-mer calculation errors, or k-mers from contaminants (from other assemblies).
 It could also represent alternative alleles (in heterozygous regions, only one of the two alleles is included in the assembly).
+
+# Decontamination:
+
+By sequencing and extracting DNA, we also obtained environmental bacterial DNA, DNA from the organism itself (including the gut), and viral DNA.
+Tools are needed to remove reads that do not belong to the taxon of interest. This is done partially using taxonomic annotation (e.g., BLAST → assigning a taxonomic identifier to each contig).
+Further cleaning is performed based on assembly characteristics (e.g., differing GC content depending on the taxon or DNA type, such as mitochondrial DNA).
+
+### Mapping of the contaminants:
+
+I'm creating the file mapping_contaminants.sh, that'll contain my pipeline:
+
+```bash
+#|assembly|
+minimap2 -ax sr –MD -t 6 Anoste_raw.fasta SRR11672503_1_paired.fastq Anoste_raw.fasta SRR11672503_2_paired.fastq | samtools view -Sb - > Anoste_pol_sr.bam
+samtools sort -@6 -o Anoste_pol_sr_sorted.bam Anoste_pol_sr.bam
+samtools index Anoste_pol_sr_sorted.bam
+rm Anoste_pol_sr.bam
+```
+### Taxonomic annotation of the contigs:
+
+We need to use BLASTn: a BLAST process done on nucleotides.
+
+This is the structure:
+
+```bash
+blastn -query <ASSEMBLY> -db <PATH/TO/nt/> -outfmt '6 qseqid staxids bitscore std sscinames sskingdoms stitle' -max_target_seqs 25 -max_hsps 1 -num_threads 25 -evalue 1e-25 -out <OUTFILE>
+```
+
+#### Building BlobDB:
+
+For this, we'll need the following files:
+
+* Anoste_pol.fasta
+* Anoste_pol_sorted.bam
+* Anoste_pol_sorted.bam.bai
+* Anoste_blast.tsv
+
+blobtools create -i <ASSEMBLY> -b <MAPPING_FILE> -t <BLASTN_FILE> -o <OUTPUT_PREFIX>
+
