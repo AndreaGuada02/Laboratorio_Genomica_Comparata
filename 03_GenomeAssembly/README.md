@@ -184,5 +184,67 @@ For this, we'll need the following files:
 * Anoste_pol_sorted.bam.bai
 * Anoste_blast.tsv
 
+```bash
 blobtools create -i <ASSEMBLY> -b <MAPPING_FILE> -t <BLASTN_FILE> -o <OUTPUT_PREFIX>
+```
+
+Now we're launching the following commands, using the files created with the last one:
+
+```bash
+* blobtools view -i <JSON_FILE> -o <OUTPUT_PREFIX>
+* blobtools plot -i <JSON_FILE> -o <OUTPUT_PREFIX>
+```
+#### BlobDB results:
+
+It generates two PNG files:
+
+* Covariance
+* Plot → showing identified phyla along with GC content and coverage
+
+It is also possible to create similar plots at the genus or species level to achieve higher taxonomic resolution.
+Caution is needed when filtering at very specific levels, especially for poorly studied groups, as this may result in over-filtering.
+
+BlobDB works with phyla, showing the percentage of mapped reads:
+
+* 91% of our contigs are identified as Arthropoda
+* 6% of reads are Pseudomonas (gut)
+* Other stuff in a small %
+
+#### Removing the non-Arthropoda portions:
+
+We need to remove the portions of the assembly that are non-Arthropoda (since we're studying a mosquito).
+
+* First, check the table.txt file just created (less Anoste.Anoste_blob.blobDB.table.txt)
+
+I want to keep only the contigs that have “Arthropoda” in the third-to-last column.
+
+Save the list of Arthropoda contigs to a new file:
+
+```bash
+grep "Arthropoda" Anoste.Anoste_blob.blobDB.table.txt | wc -l > contig_arthropoda.tsv
+```
+
+#### Decontaminating:
+
+```bash
+awk ' { if ((NR>1)&&($0 ~/^>/)) { printf("\n%s", $0) } else if (NR==1) { printf("\t%s", $0); } else { printf("\t%s", $0); } }' Anoste_pol.fasta | grep -w -v -Ff <(cut -f1 contig_arthropoda.tsv) - | tr "\t" "\n" > Anoste_decontaminated.fasta
+```
+The first part ensures the FASTA is in oneline form and reformat the file obtaing ">header\tsequence". In this way it is easier to process the file with grep. Then filters out everything is contained inside the patterns file, outputting a fasta file oneline with only desired contigs.
+
+Using the list of “good” contigs contained in the file contig_arthropoda.tsv, a new FASTA file (Anoste_decontaminated.fasta) is generated, containing only the contigs to keep (those not removed by the filtering step).
+
+Using awk, I obtained a file where each line is concatenated directly to its header (one-line format) [awk is a program used to interact with columns in a file].
+
+Single quotes after awk indicate what actions to perform; curly braces {} define a sequence of commands (e.g., “do this, then do that, etc.”).
+
+The file or standard output to process is specified afterward.
+
+* The - symbol in a command represents the standard output of the previous command.
+* -Ff allows splitting each line of a file into fields based on a delimiter.
+* cut -F1 extracts the first field (i.e., the first column).
+* < means: treat what follows as input for a temporary file → it’s a command substitution.
+* -w ensures that only the exact pattern is matched; without it, searching for ctg1 could also match ctg10, ctg11, etc.
+* \n represents a new line.
+
+After this, the following grep keeps only the contigs that are not contaminants (thus retaining Arthropoda contigs).
 
