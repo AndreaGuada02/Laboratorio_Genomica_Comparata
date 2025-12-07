@@ -1,4 +1,4 @@
-# Genome Assembly
+g# Genome Assembly
 A genome assembly is a computational representation of a genome sequence. Because we are not able to sequence along the complete length of a chromosome, each chromosome assembly is made up of short stretches of sequenced DNA pasted together.
 
 * Contig assembly + error correction (depending on the type of reads)
@@ -154,7 +154,7 @@ By sequencing and extracting DNA, we also obtained environmental bacterial DNA, 
 Tools are needed to remove reads that do not belong to the taxon of interest. This is done partially using taxonomic annotation (e.g., BLAST → assigning a taxonomic identifier to each contig).
 Further cleaning is performed based on assembly characteristics (e.g., differing GC content depending on the taxon or DNA type, such as mitochondrial DNA).
 
-### Mapping of the contaminants:
+### 1-Mapping of the contaminants:
 
 I'm creating the file mapping_contaminants.sh, that'll contain my pipeline:
 
@@ -165,7 +165,7 @@ samtools sort -@6 -o Anoste_pol_sr_sorted.bam Anoste_pol_sr.bam
 samtools index Anoste_pol_sr_sorted.bam
 rm Anoste_pol_sr.bam
 ```
-### Taxonomic annotation of the contigs:
+### 2-Taxonomic annotation of the contigs:
 
 We need to use BLASTn: a BLAST process done on nucleotides.
 
@@ -248,3 +248,18 @@ The file or standard output to process is specified afterward.
 
 After this, the following grep keeps only the contigs that are not contaminants (thus retaining Arthropoda contigs).
 
+### 3-Scaffolding
+
+After polishing and decontamination, scaffolding is performed: given prior information (a reference genome or experiments indicating contig proximity), we assemble contigs as accurately as possible, allowing gaps represented by “N”.
+
+The program RagTag matches our contigs to a reference genome (e.g., contig27 is likely on chromosome 5).
+It is a collection of software tools for scaffolding and improving modern genome assemblies. Its tasks include:
+
+* Homology-based misassembly correction
+* Homology-based assembly scaffolding and patching
+* Scaffold merging
+
+```bash
+ragtag.py scaffold -C -t 20 -o <OUTPUT_DIR> <REFERENCE_GENOME> <CORRECTED_DRAFTGENOME>
+```
+-C moves the contigs without a location in the 0-Chromosome, that contains "junk": we agree to eliminate it afterwards, losing a part of the information.
