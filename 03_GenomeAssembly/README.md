@@ -34,14 +34,14 @@ This allows us to assemble the full genome of a species as accurately and contig
 ### N50: the length of the shortest contig whose cumulative length accounts for at least 50% of the entire assembly.
 The larger this value is, the more contiguous the assembly.
 ```bash
-conda activate assembly
+#|assembly|
 assembly-stats Anoste_raw.fasta > Anoste_raw.stats
 ```
 ### BUSCO: a tool that performs sequence searches to compare our assembly against a curated dataset of genes known to be present in a given group of organisms.
 This dataset contains a set of genes shared by all organisms studied within that group. Naturally, the closer the taxa are evolutionarily (i.e., the narrower the group), the larger the pool of shared genes.
 The goal is to compare the assembled genome with this dataset to check whether the expected genes are present. If many are missing, it likely indicates problems in the assembly process.
 ```bash
-conda activate sequence
+#|sequence|
 export NUMEXPR_MAX_THREADS=80
 busco -m geno -l $BUSCO/culicidae_odb12 -c 6 -o Anoste_raw_busco -i Anoste_raw.fasta 
 ```
@@ -58,61 +58,92 @@ The first `export` is needed to set the `NUMEXPR_MAX_THREADS` equals to the numb
 It provides a representation of the frequency of k-mers included or not included in the assembly.
 
 # Polishing
-Operations in order to polish the genome.
+We will now use the short reads to refine the assembly → genome polishing.
 
 ### Mapping of the reads
-Mapping the short-reads on the whole genome.
+Mapping: the process by which we realign reads to a specific assembly.
 
->Il codice in questione è stato scritto all'interno del file mapping.sh
+>We're creating the file mapping.sh and writing the following code inside of it:
+
 ```bash
 #|assembly|
-minimap2 -ax --MD -t 6 Anoste_raw.fasta SRR11672503_1_paired_fastq SRR11672503_1_paired_fastq > Anoste_raw_sr.sam
+#Short reads
+minimap2 -ax sr –MD -t 6 Anoste_raw.fasta SRR11672503_1_paired.fastq Anoste_raw.fasta SRR11672503_2_paired.fastq > Anoste_raw.sam
 samtools view -Sb Anoste_raw_sr.sam > Anoste_raw_sr.bam
 rm Anoste_raw_sr.sam
 samtools sort -@6 -o Anoste_raw_sr_sorted.bam Anoste_raw_sr.bam
 samtools index Anoste_raw_sr_sorted.bam
-rm Anoste_raw_sr.bam
-```
+rm Anoste_pol_sr.bam
 
-Mappatura delle long reads sul genoma assemblato
-
-```bash
-#|assembly|
-minimap2 -ax --MD -t 6 Anoste_raw.fasta SRR11672503_1_paired_fastq SRR11672503_1_paired_fastq > Anoste_raw_lr.sam
+#Long Reads
+minimap2 -ax sr –MD -t 6 Anoste_raw.fasta SRR11672503.fastq.gz > Anoste_raw_lr.sam 
 samtools view -Sb Anoste_raw_lr.sam > Anoste_raw_lr.bam
 rm Anoste_raw_lr.sam
 samtools sort -@6 -o Anoste_raw_lr_sorted.bam Anoste_raw_lr.bam
 samtools index Anoste_raw_lr_sorted.bam
-rm Anoste_raw_lr.bam
+rm Anoste_pol_lr.bam
 ```
 
+I'm then saving this file and after that:
 
-### Pulizia dell'assemblaggio
-Miglioramento della sequenza del genoma frazie al confronto con le reads mappate precedentemente
+```bash
+-	bash mapping.sh
+```
+
+### Assembly polishing:
+#### Hypo:
+Hypo is used to improve (polish) a draft assembly (contigs) by leveraging raw reads (short reads and/or long reads) mapped onto the assembly.
+Its goal is to correct errors, indels, and incorrect bases to obtain a more accurate version of the genome.
+
+*	R1 = SRR11672503_1_paired.fastq
+*	R2 = SRR11672503_2_paired.fastq
 
 ```bash
 #|assembly|
 echo e- "$R1\n$R2" > Sr.path
 hypo -d Anoste_raw.fasta -r @Sr.path -s 227054799 -c 136 -b Anoste_raw_sr_sorted.bam -B Anoste_raw_lr_sorted.bam -t 6 
 ```
+### Assembly quality check:
+Now we need to perform assembly quality control again using N50 and BUSCO.
+assembly-stats is a program (often installed via conda/bioconda) that reads a FASTA assembly file and calculates:
 
+* number of contigs
+* total assembly size
+* maximum and minimum contig length
+* N50, N75, N90
+* L50, L75, L90
+* GC%
+* other useful metrics for quickly assessing assembly quality
 
-### Controllo qualità del genoma pulito
-Verifica delle statistiche inerenti al genoma di i passaggi di pulizia. il controllo qualitativo è svolto con gli stessi metodi adoperati in precedenza con l'assemblaggio "raw" del genoma.
-
-##### N50 
+#### N50 
 ```bash
 #|assembly|
 assembly-stats Anoste_pol.fasta > Anoste_pol.stats
 ```
-##### Busco
+#### Busco
 ```bash
 #|sequence|
 busco -m geno -l $BUSCO/culicidae_odb12 -c 8 -o Anoste_pol_busco -i Anoste_pol.fasta
 ```
+Looking at the BUSCO results: my assembly genomically contains 98.8% of the 7,027 coding genes found across the 13 culicid genomes included in the Culicidae dataset used for the analysis.
+When we broaden the clade analyzed with BUSCO, the number of orthologs shared by all species decreases (the genomic core defining that clade becomes smaller as more, and more diverse, species are included).
 
-##### Spectra-cn (KAT)
+* This is why the analysis using the Culicidae database yields more orthologs than the analysis using the Diptera database.
+
+#### spectra-cn (KAT)
 ```bash
 #|kat|
 kat comp -t 8 -o Anoste_pol 'SRR11672503_1_paired.fastq SRR11672503_2_paired.fastq' Anoste_pol.fasta
 ```
+KAT (kat comp): compares the k-mer distribution between the raw reads (input) and the assembly (FASTA).
+It helps us understand which read sequences were included in the assembly, which parts were missed (k-mers present in the reads but absent from the assembly → missing), whether there are duplications (k-mers over-represented in the assembly → duplicated), and whether the assembly error rate is high or low.
+
+* KAT produces a k-mer comparison plot (usually a .png) and accompanying statistics files.
+##### K-mer comparison plot (obtained):
+
+While GenomeScope shows the distribution of k-mer variability, here we visualize the multiplicity of k-mers with coverage over the assembly. The red color indicates k-mers that are duplicated only once.
+This means that our distinct k-mers were used only once across the entire assembly (there is no genome duplication complexity).
+
+Sometimes, there may be regions of the genome with high multiplicity, but the k-mers are duplicated (shown in different colors on the plot).
+We also see 0x coverage (black), which represents k-mers that were not used to produce the assembly. These could be sequencing errors, k-mer calculation errors, or k-mers from contaminants (from other assemblies).
+It could also represent alternative alleles (in heterozygous regions, only one of the two alleles is included in the assembly).
