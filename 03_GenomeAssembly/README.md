@@ -1,4 +1,4 @@
-g# Genome Assembly
+# Genome Assembly
 A genome assembly is a computational representation of a genome sequence. Because we are not able to sequence along the complete length of a chromosome, each chromosome assembly is made up of short stretches of sequenced DNA pasted together.
 
 * Contig assembly + error correction (depending on the type of reads)
